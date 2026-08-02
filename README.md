@@ -8,11 +8,11 @@ Visualize COLMAP sparse reconstructions directly inside VS Code, powered by Thre
 
 - Reads standard COLMAP sparse models: `cameras` / `images` / `points3D` in **`.bin`** or **`.txt`** format
 - Renders the sparse point cloud with true RGB colors, plus reprojection-error and height color modes
-- Draws every registered image as a camera frustum (with an "up" indicator), sized by its actual intrinsics; frustum size, line width and color are all adjustable
+- Draws every registered image with model-aware camera geometry, using the true per-model unprojection (including lens distortion): pinhole-family models get the classic frustum (with an "up" indicator), fisheye models a curved-border frustum that stays correct beyond 180° FOV, and equirectangular panoramas a wireframe sphere; size, line width and color are all adjustable
 - Optional camera trajectory polyline (ordered by image name)
 - Filters: max reprojection error, min track length
-- Click a frustum to inspect image name / camera model / position; double-click the cloud to re-center the orbit pivot
-- Handles all COLMAP camera models (IDs 0–10) plus common extensions (division, fisheye, EUCM, equirectangular)
+- Click a camera to inspect image name / camera model / position; double-click the cloud to re-center the orbit pivot
+- Handles all COLMAP camera models (IDs 0–17: standard models plus division, fisheye, EUCM and equirectangular extensions), and reads models written by both current COLMAP (16-param `RAD_TAN_THIN_PRISM_FISHEYE`, 2-param `EQUIRECTANGULAR`) and older writers (legacy 14-/3-param variants)
 
 ## Install
 

@@ -7,13 +7,15 @@ import {
   ColmapCamera,
   ColmapImagePose,
   ColmapPointCloud,
+  camRayFromImg,
+  isFisheyeModel,
+  isSphericalModel,
   parseCamerasBin,
   parseCamerasText,
   parseImagesBin,
   parseImagesText,
   parsePoints3DBin,
   parsePoints3DText,
-  pinholeIntrinsics,
   poseToWorld,
 } from '../src/colmap/parser';
 
@@ -58,6 +60,8 @@ const state = {
   flipped: true,
   visiblePoints: 0,
   selected: -1 as number,
+  /** glyph depth for spherical cameras, set by rebuildFrustums */
+  sphereDepth: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -140,6 +144,7 @@ scene.add(root);
 
 let pointsObj: THREE.Points | null = null;
 let frustumObj: LineSegments2 | null = null;
+let sphereFillObj: THREE.InstancedMesh | null = null;
 let centersObj: THREE.Points | null = null;
 let pathObj: THREE.Line | null = null;
 let axesObj: THREE.AxesHelper | null = null;
@@ -261,25 +266,50 @@ function rebuildPointCloud(): void {
 
 // --- frustums ------------------------------------------------------------------------
 
-/** 10 segments per camera: 4 apex->corner, 4 image-rect edges, 2 up-indicator. */
+/**
+ * Line segments (as flat point pairs, [0] = camera center) visualizing one
+ * camera. Shape depends on the camera model: pinhole-family models get the
+ * classic 4-corner frustum, fisheye models a curved-border frustum built from
+ * the true unprojected image border, spherical (equirectangular) panoramas a
+ * wireframe sphere with a forward spoke.
+ */
 function frustumSegments(img: ColmapImagePose, cam: ColmapCamera | undefined, depth: number): THREE.Vector3[] {
   const { center, rotCW } = poseToWorld(img);
   const C = new THREE.Vector3(...center);
-  const w = cam?.width ?? 1000;
-  const h = cam?.height ?? 750;
-  const { fx, fy, cx, cy } = cam
-    ? pinholeIntrinsics(cam)
-    : { fx: 1000, fy: 1000, cx: 500, cy: 375 };
 
-  const toWorld = (px: number, py: number): THREE.Vector3 => {
-    const xc = ((px - cx) / fx) * depth;
-    const yc = ((py - cy) / fy) * depth;
-    const zc = depth;
-    return new THREE.Vector3(
-      rotCW[0] * xc + rotCW[1] * yc + rotCW[2] * zc + C.x,
-      rotCW[3] * xc + rotCW[4] * yc + rotCW[5] * zc + C.y,
-      rotCW[6] * xc + rotCW[7] * yc + rotCW[8] * zc + C.z
+  /** Camera-frame direction * len -> world point. */
+  const dirToWorld = (d: [number, number, number], len: number): THREE.Vector3 =>
+    new THREE.Vector3(
+      (rotCW[0] * d[0] + rotCW[1] * d[1] + rotCW[2] * d[2]) * len + C.x,
+      (rotCW[3] * d[0] + rotCW[4] * d[1] + rotCW[5] * d[2]) * len + C.y,
+      (rotCW[6] * d[0] + rotCW[7] * d[1] + rotCW[8] * d[2]) * len + C.z
     );
+
+  if (!cam) {
+    // no intrinsics: draw a generic pinhole frustum
+    const fake: ColmapCamera = {
+      id: -1, modelId: 1, model: 'PINHOLE', width: 1000, height: 750,
+      params: [1000, 1000, 500, 375],
+    };
+    return frustumSegmentsPinhole(fake, dirToWorld, C, depth);
+  }
+  if (isSphericalModel(cam)) return frustumSegmentsSphere(dirToWorld, C, depth);
+  if (isFisheyeModel(cam)) return frustumSegmentsFisheye(cam, dirToWorld, C, depth);
+  return frustumSegmentsPinhole(cam, dirToWorld, C, depth);
+}
+
+/** 10 segments: 4 apex->corner, 4 image-rect edges, 2 up-indicator. */
+function frustumSegmentsPinhole(
+  cam: ColmapCamera,
+  dirToWorld: (d: [number, number, number], len: number) => THREE.Vector3,
+  C: THREE.Vector3,
+  depth: number
+): THREE.Vector3[] {
+  const { width: w, height: h } = cam;
+  // scale rays onto the plane z = depth (classic image-plane frustum)
+  const toWorld = (px: number, py: number): THREE.Vector3 => {
+    const r = camRayFromImg(cam, px, py);
+    return dirToWorld(r, depth / Math.max(r[2], 0.05));
   };
 
   const c0 = toWorld(0, 0); // top-left
@@ -295,12 +325,115 @@ function frustumSegments(img: ColmapImagePose, cam: ColmapCamera | undefined, de
   ];
 }
 
+/**
+ * Fisheye frustum: 4 apex->corner spokes plus the true (curved) image border
+ * sampled at several points per edge, and a 2-segment up-indicator. Rays keep
+ * constant length so fields of view >= 180 deg still render sensibly.
+ */
+function frustumSegmentsFisheye(
+  cam: ColmapCamera,
+  dirToWorld: (d: [number, number, number], len: number) => THREE.Vector3,
+  C: THREE.Vector3,
+  depth: number
+): THREE.Vector3[] {
+  const { width: w, height: h } = cam;
+  const N = 6; // border samples per edge
+  const border: THREE.Vector3[] = [];
+  const push = (px: number, py: number) => border.push(dirToWorld(camRayFromImg(cam, px, py), depth));
+  for (let i = 0; i < N; i++) push((w * i) / N, 0); // top
+  for (let i = 0; i < N; i++) push(w, (h * i) / N); // right
+  for (let i = 0; i < N; i++) push(w - (w * i) / N, h); // bottom
+  for (let i = 0; i < N; i++) push(0, h - (h * i) / N); // left
+
+  const c0 = border[0]; // top-left
+  const c1 = border[N]; // top-right
+  const c2 = border[2 * N]; // bottom-right
+  const c3 = border[3 * N]; // bottom-left
+
+  // "up" indicator: peak above the top edge midpoint (world up = camera -y)
+  const topMid = dirToWorld(camRayFromImg(cam, w / 2, 0), depth);
+  const upWorld = dirToWorld([0, -1, 0], 1).sub(C).multiplyScalar(0.35 * depth);
+  const peak = topMid.clone().add(upWorld);
+
+  const segs: THREE.Vector3[] = [C, c0, C, c1, C, c2, C, c3];
+  for (let i = 0; i < border.length; i++) {
+    segs.push(border[i], border[(i + 1) % border.length]);
+  }
+  segs.push(peak, c0, peak, c1);
+  return segs;
+}
+
+/**
+ * Spherical (equirectangular) camera: latitude/longitude wireframe sphere plus
+ * a forward spoke marking the image center, following COLMAP's
+ * BuildSphericalCameraModel (model_viewer_widget.cc): the grid uses the same
+ * equirectangular parametrization as the camera model, so parallels/meridians
+ * align with the image rows/columns.
+ */
+const SPHERE_STACKS = 6; // latitude (elevation) divisions
+const SPHERE_SLICES = 12; // longitude (azimuth) divisions
+
+function sphereDir(stack: number, slice: number): [number, number, number] {
+  const phi = Math.PI * (0.5 - stack / SPHERE_STACKS);
+  const theta = 2 * Math.PI * (slice / SPHERE_SLICES - 0.5);
+  const cosPhi = Math.cos(phi);
+  return [cosPhi * Math.sin(theta), -Math.sin(phi), cosPhi * Math.cos(theta)];
+}
+
+function frustumSegmentsSphere(
+  dirToWorld: (d: [number, number, number], len: number) => THREE.Vector3,
+  C: THREE.Vector3,
+  depth: number
+): THREE.Vector3[] {
+  const r = depth * 0.5; // COLMAP: radius = image_extent / 2
+  const segs: THREE.Vector3[] = [];
+  // forward spoke (image center indicator) first so segs[0] stays the center
+  segs.push(C, dirToWorld([0, 0, 1], 1.2 * r));
+  // latitude circles (parallels), skipping the degenerate poles
+  for (let i = 1; i < SPHERE_STACKS; i++) {
+    for (let j = 0; j < SPHERE_SLICES; j++) {
+      segs.push(dirToWorld(sphereDir(i, j), r), dirToWorld(sphereDir(i, j + 1), r));
+    }
+  }
+  // longitude half-circles (meridians)
+  for (let j = 0; j < SPHERE_SLICES; j++) {
+    for (let i = 0; i < SPHERE_STACKS; i++) {
+      segs.push(dirToWorld(sphereDir(i, j), r), dirToWorld(sphereDir(i + 1, j), r));
+    }
+  }
+  return segs;
+}
+
+/**
+ * Depth used for spherical camera glyphs: like `depth` for pinhole frustums,
+ * but capped near the median spacing between consecutive cameras so that a
+ * dense video trajectory doesn't drown in overlapping spheres.
+ */
+function sphericalDepth(depth: number): number {
+  if (state.images.length < 2) return depth;
+  const order = [...state.images].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true })
+  );
+  const dists: number[] = [];
+  let prev = poseToWorld(order[0]).center;
+  for (let i = 1; i < order.length; i++) {
+    const cur = poseToWorld(order[i]).center;
+    dists.push(Math.hypot(cur[0] - prev[0], cur[1] - prev[1], cur[2] - prev[2]));
+    prev = cur;
+  }
+  dists.sort((a, b) => a - b);
+  const median = dists[Math.floor(dists.length / 2)];
+  return median > 1e-9 ? Math.min(depth, 1.6 * median) : depth;
+}
+
 function rebuildFrustums(): void {
   const wasVisibleF = frustumObj ? frustumObj.visible : true;
   disposeObj(frustumObj);
+  disposeObj(sphereFillObj);
   disposeObj(centersObj);
   disposeObj(pathObj);
   frustumObj = null;
+  sphereFillObj = null;
   centersObj = null;
   pathObj = null;
   frustumInfos = [];
@@ -308,13 +441,15 @@ function rebuildFrustums(): void {
   if (state.images.length === 0) return;
 
   const depth = state.sceneRadius * state.frustumScale;
+  state.sphereDepth = sphericalDepth(depth);
   const verts: number[] = [];
   const centerArr = new Float32Array(state.images.length * 3);
+  const sphereCenters: THREE.Vector3[] = [];
 
   for (let i = 0; i < state.images.length; i++) {
     const img = state.images[i];
     const cam = state.cameras.get(img.cameraId);
-    const segPts = frustumSegments(img, cam, depth);
+    const segPts = frustumSegments(img, cam, cam && isSphericalModel(cam) ? state.sphereDepth : depth);
     const info: FrustumInfo = {
       image: img,
       center: segPts[0].clone(),
@@ -325,6 +460,7 @@ function rebuildFrustums(): void {
     centerArr[i * 3] = segPts[0].x;
     centerArr[i * 3 + 1] = segPts[0].y;
     centerArr[i * 3 + 2] = segPts[0].z;
+    if (cam && isSphericalModel(cam)) sphereCenters.push(info.center);
   }
 
   const geo = new LineSegmentsGeometry();
@@ -333,6 +469,32 @@ function rebuildFrustums(): void {
   frustumObj.frustumCulled = false;
   frustumObj.visible = wasVisibleF;
   root.add(frustumObj);
+
+  // translucent sphere fill for spherical cameras (COLMAP draws the sphere as
+  // a translucent triangle mesh under the wireframe)
+  if (sphereCenters.length > 0) {
+    const r = state.sphereDepth * 0.5;
+    const sgeo = new THREE.SphereGeometry(1, SPHERE_SLICES, SPHERE_STACKS);
+    // keep the fill subtle: dense video captures stack many overlapping
+    // translucent spheres, and their alpha accumulates
+    const smat = new THREE.MeshBasicMaterial({
+      color: state.frustumColor,
+      transparent: true,
+      opacity: Math.min(0.1, 8 / sphereCenters.length),
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    sphereFillObj = new THREE.InstancedMesh(sgeo, smat, sphereCenters.length);
+    const m = new THREE.Matrix4();
+    sphereCenters.forEach((c, i) => {
+      m.makeScale(r, r, r).setPosition(c);
+      sphereFillObj!.setMatrixAt(i, m);
+    });
+    sphereFillObj.instanceMatrix.needsUpdate = true;
+    sphereFillObj.frustumCulled = false;
+    sphereFillObj.visible = wasVisibleF;
+    root.add(sphereFillObj);
+  }
 
   // pickable camera centers (invisible but raycastable when frustums visible)
   const cgeo = new THREE.BufferGeometry();
@@ -368,7 +530,7 @@ function selectCamera(index: number): void {
   const info = frustumInfos[index];
   if (!info) return;
   const cam = state.cameras.get(info.image.cameraId);
-  const depth = state.sceneRadius * state.frustumScale;
+  const depth = cam && isSphericalModel(cam) ? state.sphereDepth : state.sceneRadius * state.frustumScale;
   const segPts = frustumSegments(info.image, cam, depth * 1.02);
   const verts: number[] = [];
   for (const p of segPts) verts.push(p.x, p.y, p.z);
@@ -465,6 +627,7 @@ function wireUi(): void {
   $<HTMLInputElement>('chk-cams').addEventListener('change', (e) => {
     const on = (e.target as HTMLInputElement).checked;
     if (frustumObj) frustumObj.visible = on;
+    if (sphereFillObj) sphereFillObj.visible = on;
     if (!on) clearSelection();
   });
   $<HTMLInputElement>('chk-path').addEventListener('change', (e) => {
@@ -501,6 +664,7 @@ function wireUi(): void {
   $<HTMLInputElement>('cl-frustum').addEventListener('input', (e) => {
     state.frustumColor = (e.target as HTMLInputElement).value;
     frustumMat.color.set(state.frustumColor);
+    if (sphereFillObj) (sphereFillObj.material as THREE.MeshBasicMaterial).color.set(state.frustumColor);
   });
 
   $<HTMLSelectElement>('sel-color').addEventListener('change', (e) => {
