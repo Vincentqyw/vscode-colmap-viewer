@@ -1,8 +1,8 @@
 {
   "name": "colmap-sparse-viewer",
   "displayName": "COLMAP Sparse Viewer",
-  "description": "Visualize COLMAP sparse reconstructions (point cloud + camera poses) inside VS Code. Supports .bin and .txt models.",
-  "version": "0.1.2",
+  "description": "Visualize COLMAP sparse reconstructions inside VS Code. Supports .bin and .txt models.",
+  "version": "0.1.3",
   "publisher": "vincentqyw",
   "author": {
     "name": "Vincent Qin"

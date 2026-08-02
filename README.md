@@ -1,6 +1,6 @@
 # COLMAP Sparse Viewer
 
-Visualize COLMAP sparse reconstructions (3D point cloud + camera poses) directly inside VS Code, powered by Three.js.
+Visualize COLMAP sparse reconstructions directly inside VS Code, powered by Three.js.
 
 ![Viewer UI](assets/ui.webp)
 
@@ -13,6 +13,11 @@ Visualize COLMAP sparse reconstructions (3D point cloud + camera poses) directly
 - Filters: max reprojection error, min track length
 - Click a frustum to inspect image name / camera model / position; double-click the cloud to re-center the orbit pivot
 - Handles all COLMAP camera models (IDs 0–10) plus common extensions (division, fisheye, EUCM, equirectangular)
+
+## Install
+
+- From the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=vincentqyw.colmap-sparse-viewer), or
+- Download the `.vsix` from [GitHub Releases](https://github.com/Vincentqyw/vscode-colmap-viewer/releases) and run `code --install-extension colmap-sparse-viewer-<version>.vsix`
 
 ## Usage
 
@@ -43,6 +48,14 @@ npm run package    # create .vsix
 ```
 
 Install the generated `.vsix` with `code --install-extension colmap-sparse-viewer-<version>.vsix`.
+
+### Releasing
+
+Bump `version` in `package.json`, then push a matching tag — CI builds the `.vsix`, attaches it to a GitHub Release, and (if the `VSCE_PAT` secret is set) publishes to the Marketplace:
+
+```bash
+git tag v0.1.4 && git push origin main v0.1.4
+```
 
 ## License
 
