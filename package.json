@@ -1,0 +1,85 @@
+{
+  "name": "colmap-sparse-viewer",
+  "displayName": "COLMAP Sparse Viewer",
+  "description": "Visualize COLMAP sparse reconstructions (point cloud + camera poses) inside VS Code. Supports .bin and .txt models.",
+  "version": "0.1.2",
+  "publisher": "vincentqyw",
+  "author": {
+    "name": "Vincent Qin"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vincentqyw/vscode-colmap-viewer.git"
+  },
+  "homepage": "https://github.com/Vincentqyw/vscode-colmap-viewer#readme",
+  "bugs": {
+    "url": "https://github.com/Vincentqyw/vscode-colmap-viewer/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "colmap",
+    "sfm",
+    "point cloud",
+    "3d",
+    "structure from motion"
+  ],
+  "icon": "media/icon.png",
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "colmapViewer.openModel",
+        "title": "COLMAP: Visualize Sparse Model"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "colmapViewer.openModel",
+          "when": "explorerResourceIsFolder || resourceFilename =~ /^(cameras|images|points3D)\\.(bin|txt)$/",
+          "group": "navigation@50"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "colmapViewer.modelEditor",
+        "displayName": "COLMAP Sparse Viewer",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "**/cameras.bin"
+          },
+          {
+            "filenamePattern": "**/images.bin"
+          },
+          {
+            "filenamePattern": "**/points3D.bin"
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "vsce package --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/three": "^0.170.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.0",
+    "three": "^0.170.0",
+    "typescript": "^5.6.3"
+  }
+}
