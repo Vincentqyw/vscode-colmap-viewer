@@ -8,3 +8,6 @@ tsconfig.json
 test/**
 assets/**
 .gitignore
+.code-review-graph/**
+.claude/**
+.github/**
