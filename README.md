@@ -49,13 +49,6 @@ npm run package    # create .vsix
 
 Install the generated `.vsix` with `code --install-extension colmap-sparse-viewer-<version>.vsix`.
 
-### Releasing
-
-Bump `version` in `package.json`, then push a matching tag — CI builds the `.vsix`, attaches it to a GitHub Release, and (if the `VSCE_PAT` secret is set) publishes to the Marketplace:
-
-```bash
-git tag v0.1.4 && git push origin main v0.1.4
-```
 
 ## License
 
