@@ -25,7 +25,7 @@ Visualize COLMAP sparse reconstructions directly inside VS Code, powered by Thre
 - **Right-click a folder** (e.g. `sparse/0`, or any ancestor — the model is auto-discovered up to 3 levels deep) → *COLMAP: Visualize Sparse Model*, or
 - Run **`COLMAP: Visualize Sparse Model`** from the command palette and pick a folder.
 
-<img src="assets/right-click.webp" alt="Right-click menu" width="360">
+https://github.com/user-attachments/assets/66d9f7dc-7e90-4e09-b429-33982b24714a
 
 ## Controls
 
