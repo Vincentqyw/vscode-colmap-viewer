@@ -49,9 +49,14 @@ const state = {
   trackMax: 2,
   sceneCenter: new THREE.Vector3(),
   sceneRadius: 1,
+  // model_analyzer-style aggregate stats, computed once after load
+  numObservations: 0,
+  meanTrackLength: 0,
+  meanObsPerImage: 0,
+  meanReprojError: 0,
   // UI-controlled
-  pointSize: 2,
-  frustumScale: 0.15, // relative to sceneRadius
+  pointSize: 0.5,
+  frustumScale: 0.01, // relative to sceneRadius
   frustumWidth: 1.5, // line width in px
   frustumColor: '#e74c3c',
   colorMode: 'rgb' as 'rgb' | 'error' | 'height',
@@ -72,10 +77,12 @@ const app = document.getElementById('app')!;
 app.innerHTML = `
   <canvas id="c"></canvas>
   <div id="hud">
-    <div id="hud-header">
+    <div id="hud-header" title="Click to collapse/expand">
       <img id="hud-logo" class="hidden" alt="">
       <div id="hud-title">COLMAP Sparse Viewer</div>
+      <div id="hud-toggle">▴</div>
     </div>
+    <div id="hud-body">
     <div id="hud-path" title=""></div>
     <div id="stats"></div>
     <div class="row checks">
@@ -84,8 +91,8 @@ app.innerHTML = `
       <label><input type="checkbox" id="chk-path"> Path</label>
       <label><input type="checkbox" id="chk-axes"> Axes</label>
     </div>
-    <div class="row"><span class="lbl">Point size</span><input type="range" id="sl-psize" min="0.5" max="8" step="0.5" value="2"><span class="val" id="v-psize">2</span></div>
-    <div class="row"><span class="lbl">Cam size</span><input type="range" id="sl-fsize" min="1" max="100" step="1" value="15"><span class="val" id="v-fsize"></span></div>
+    <div class="row"><span class="lbl">Point size</span><input type="range" id="sl-psize" min="0.5" max="8" step="0.5" value="0.5"><span class="val" id="v-psize">0.5</span></div>
+    <div class="row"><span class="lbl">Cam size</span><input type="range" id="sl-fsize" min="0.2" max="20" step="0.2" value="1"><span class="val" id="v-fsize">1</span></div>
     <div class="row"><span class="lbl">Cam style</span><input type="range" id="sl-fwidth" min="1" max="6" step="0.5" value="1.5" title="Frustum line width"><input type="color" id="cl-frustum" value="#e74c3c" title="Frustum color"></div>
     <div class="row"><span class="lbl">Color</span>
       <select id="sel-color">
@@ -99,6 +106,7 @@ app.innerHTML = `
     <div class="row btns">
       <button id="btn-reset">Reset view</button>
       <button id="btn-flip">Flip up axis</button>
+    </div>
     </div>
   </div>
   <div id="info" class="hidden"></div>
@@ -613,14 +621,52 @@ function resetView(): void {
 
 // --- stats / UI wiring ---------------------------------------------------------------
 
+/**
+ * Aggregate stats matching `colmap model_analyzer` (Reconstruction::Compute*):
+ * observations = sum of track lengths, mean reprojection error averaged over
+ * points with a valid (>= 0) error.
+ */
+function computeModelStats(): void {
+  const pts = state.points;
+  if (!pts) return;
+  let obs = 0;
+  let errSum = 0;
+  let errCount = 0;
+  for (let i = 0; i < pts.count; i++) {
+    obs += pts.trackLengths[i];
+    if (pts.errors[i] >= 0) {
+      errSum += pts.errors[i];
+      errCount++;
+    }
+  }
+  state.numObservations = obs;
+  state.meanTrackLength = pts.count > 0 ? obs / pts.count : 0;
+  state.meanObsPerImage = state.images.length > 0 ? obs / state.images.length : 0;
+  state.meanReprojError = errCount > 0 ? errSum / errCount : 0;
+}
+
 function updateStats(): void {
   const total = state.points?.count ?? 0;
-  statsEl.textContent =
-    `Points: ${state.visiblePoints.toLocaleString()} / ${total.toLocaleString()}` +
-    `  ·  Images: ${state.images.length.toLocaleString()}  ·  Cams: ${state.cameras.size}`;
+  const rows: Array<[string, string]> = [
+    ['Cameras', state.cameras.size.toLocaleString()],
+    ['Images', state.images.length.toLocaleString()],
+    ['Points', `${state.visiblePoints.toLocaleString()} / ${total.toLocaleString()}`],
+    ['Observations', state.numObservations.toLocaleString()],
+    ['Track length', state.meanTrackLength.toFixed(2)],
+    ['Obs / image', state.meanObsPerImage.toFixed(1)],
+    ['Reproj error', `${state.meanReprojError.toFixed(3)} px`],
+  ];
+  statsEl.innerHTML = rows
+    .map(([l, v]) => `<span class="sl">${l}</span><span class="sv">${v}</span>`)
+    .join('');
 }
 
 function wireUi(): void {
+  $('hud-header').addEventListener('click', () => {
+    const collapsed = $('hud').classList.toggle('collapsed');
+    $('hud-toggle').textContent = collapsed ? '▾' : '▴';
+  });
+
   $<HTMLInputElement>('chk-points').addEventListener('change', (e) => {
     if (pointsObj) pointsObj.visible = (e.target as HTMLInputElement).checked;
   });
@@ -650,7 +696,9 @@ function wireUi(): void {
 
   let fsizeTimer: ReturnType<typeof setTimeout> | undefined;
   $<HTMLInputElement>('sl-fsize').addEventListener('input', (e) => {
-    state.frustumScale = Number((e.target as HTMLInputElement).value) / 100;
+    const v = Number((e.target as HTMLInputElement).value);
+    state.frustumScale = v / 100;
+    $('v-fsize').textContent = String(v);
     clearTimeout(fsizeTimer);
     fsizeTimer = setTimeout(rebuildFrustums, 60);
   });
@@ -833,6 +881,7 @@ async function load(): Promise<void> {
     state.trackMax = tmax;
     $<HTMLInputElement>('sl-track').max = String(Math.min(tmax, 30));
 
+    computeModelStats();
     computeFraming();
     rebuildPointCloud();
     rebuildFrustums();

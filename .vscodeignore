@@ -11,3 +11,6 @@ assets/**
 .code-review-graph/**
 .claude/**
 .github/**
+examples/**
+thirdparty/**
+CLAUDE.md

@@ -3,3 +3,6 @@ dist/
 media/webview.js
 *.vsix
 test/parser-bundle.mjs
+examples
+thirdparty
+.code-review-graph

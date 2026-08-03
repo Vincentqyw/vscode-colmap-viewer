@@ -33,6 +33,33 @@ html, body, #app {
   align-items: center;
   gap: 6px;
   margin-bottom: 2px;
+  cursor: pointer;
+}
+
+#hud-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--vscode-foreground, #ccc);
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  font-size: 15px;
+  line-height: 1;
+}
+
+#hud-header:hover #hud-toggle {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+#hud.collapsed #hud-body {
+  display: none;
+}
+
+#hud.collapsed #hud-header {
+  margin-bottom: 0;
 }
 
 #hud-logo {
@@ -58,9 +85,18 @@ html, body, #app {
 }
 
 #stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
   margin-bottom: 8px;
   color: var(--vscode-descriptionForeground, #aaa);
   font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+#stats .sv {
+  text-align: right;
+  color: var(--vscode-foreground, #ccc);
 }
 
 .row {
