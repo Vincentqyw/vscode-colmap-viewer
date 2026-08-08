@@ -2,7 +2,7 @@
   "name": "colmap-sparse-viewer",
   "displayName": "COLMAP Sparse Viewer",
   "description": "Visualize COLMAP sparse reconstructions inside VS Code. Supports .bin and .txt models.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "vincentqyw",
   "author": {
     "name": "Vincent Qin"
