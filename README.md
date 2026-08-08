@@ -8,7 +8,7 @@ Visualize COLMAP sparse reconstructions directly inside VS Code, powered by Thre
 
 - Reads standard COLMAP sparse models: `cameras` / `images` / `points3D` in **`.bin`** or **`.txt`** format
 - Renders the sparse point cloud with true RGB colors, plus reprojection-error and height color modes
-- Draws every registered image with model-aware camera geometry, using the true per-model unprojection (including lens distortion): pinhole-family models get the classic frustum (with an "up" indicator), fisheye models a curved-border frustum that stays correct beyond 180° FOV, and equirectangular panoramas a wireframe sphere; size, line width and color are all adjustable
+- Draws every registered image with model-aware camera geometry, using the true per-model unprojection (including lens distortion): pinhole-family models get the classic frustum, fisheye models a curved-border frustum that stays correct beyond 180° FOV, and equirectangular panoramas a wireframe sphere; size, line width and color are all adjustable
 - Optional camera trajectory polyline (ordered by image name)
 - Filters: max reprojection error, min track length
 - Click a camera to inspect image name / camera model / position; double-click the cloud to re-center the orbit pivot
@@ -26,6 +26,15 @@ Visualize COLMAP sparse reconstructions directly inside VS Code, powered by Thre
 - Run **`COLMAP: Visualize Sparse Model`** from the command palette and pick a folder.
 
 https://github.com/user-attachments/assets/66d9f7dc-7e90-4e09-b429-33982b24714a
+
+## Sample data
+
+Two sample reconstructions are attached to the [v0.1.6 release](https://github.com/Vincentqyw/vscode-colmap-viewer/releases/tag/v0.1.6) for quick testing:
+
+- [`sparse_garden.zip`](https://github.com/Vincentqyw/vscode-colmap-viewer/releases/download/v0.1.6/sparse_garden.zip) — model in both `.bin` and `.txt` flavors
+- [`sparse_store.zip`](https://github.com/Vincentqyw/vscode-colmap-viewer/releases/download/v0.1.6/sparse_store.zip) — binary-only model written by a newer COLMAP (also contains `rigs.bin` / `frames.bin`)
+
+Unzip one, open the folder in VS Code, then right-click it → *COLMAP: Visualize Sparse Model*.
 
 ## Controls
 
