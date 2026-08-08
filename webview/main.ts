@@ -306,7 +306,7 @@ function frustumSegments(img: ColmapImagePose, cam: ColmapCamera | undefined, de
   return frustumSegmentsPinhole(cam, dirToWorld, C, depth);
 }
 
-/** 10 segments: 4 apex->corner, 4 image-rect edges, 2 up-indicator. */
+/** 8 segments: 4 apex->corner, 4 image-rect edges. */
 function frustumSegmentsPinhole(
   cam: ColmapCamera,
   dirToWorld: (d: [number, number, number], len: number) => THREE.Vector3,
@@ -324,19 +324,17 @@ function frustumSegmentsPinhole(
   const c1 = toWorld(w, 0); // top-right
   const c2 = toWorld(w, h); // bottom-right
   const c3 = toWorld(0, h); // bottom-left
-  const peak = toWorld(w / 2, -0.3 * h); // "up" indicator above top edge
 
   return [
     C, c0, C, c1, C, c2, C, c3,
     c0, c1, c1, c2, c2, c3, c3, c0,
-    peak, c0, peak, c1,
   ];
 }
 
 /**
  * Fisheye frustum: 4 apex->corner spokes plus the true (curved) image border
- * sampled at several points per edge, and a 2-segment up-indicator. Rays keep
- * constant length so fields of view >= 180 deg still render sensibly.
+ * sampled at several points per edge. Rays keep constant length so fields of
+ * view >= 180 deg still render sensibly.
  */
 function frustumSegmentsFisheye(
   cam: ColmapCamera,
@@ -358,16 +356,10 @@ function frustumSegmentsFisheye(
   const c2 = border[2 * N]; // bottom-right
   const c3 = border[3 * N]; // bottom-left
 
-  // "up" indicator: peak above the top edge midpoint (world up = camera -y)
-  const topMid = dirToWorld(camRayFromImg(cam, w / 2, 0), depth);
-  const upWorld = dirToWorld([0, -1, 0], 1).sub(C).multiplyScalar(0.35 * depth);
-  const peak = topMid.clone().add(upWorld);
-
   const segs: THREE.Vector3[] = [C, c0, C, c1, C, c2, C, c3];
   for (let i = 0; i < border.length; i++) {
     segs.push(border[i], border[(i + 1) % border.length]);
   }
-  segs.push(peak, c0, peak, c1);
   return segs;
 }
 
